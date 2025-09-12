@@ -7,7 +7,7 @@
 -export([client_authn/2, client_authz/5]).
 
 %% Public API: RabbitMQ plugin calls this
--spec client_authn(ClientID :: binary() | string(), ClientKey :: binary() | string()) ->
+-spec client_authn(ClientID :: string(), ClientKey :: string()) ->
     {ok, clients_pb:authn_res(), grpcbox:metadata()}
     %% {Code, Msg}
     | {error, {binary(), binary()}}
@@ -35,10 +35,10 @@ client_authn(ClientID, ClientKey) ->
             case maps:get(authenticated, ReplyData, false) of
                 true ->
                     ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
-                    {ok, ReplyData};
+                    {ok, ReplyData, Metadata};
                 1 ->
                     ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
-                    {ok, ReplyData};
+                    {ok, ReplyData, Metadata};
                 _ ->
                     ?LOG_WARNING("Auth failed: ~p", [ReplyData]),
                     {error, {unauthenticated, ReplyData}}
