@@ -1,9 +1,5 @@
-%%%-------------------------------------------------------------------
-%% @doc smq_auth public API
-%% @end
-%%%-------------------------------------------------------------------
-
 -module(smq_auth_app).
+-doc "smq_auth Application.".
 
 -behaviour(application).
 
