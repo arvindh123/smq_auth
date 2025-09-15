@@ -3,23 +3,16 @@
 %%%-------------------------------------------------------------------
 -module(smq_auth).
 -include_lib("kernel/include/logger.hrl").
+-include("smq_auth.hrl").
 
--export([client_authn/2, client_authz/5]).
+-export([client_authn/1, client_authz/1]).
 
 %% Public API: RabbitMQ plugin calls this
--spec client_authn(ClientID :: string(), ClientKey :: string()) ->
-    {ok, clients_pb:authn_res(), grpcbox:metadata()}
-    %% {Code, Msg}
-    | {error, {binary(), binary()}}
-    %% other reason
-    | {error, term()}
-    %% grpc_error details
-    | {grpc_error, term()}
-    | {error, {unexpected_response, term()}}.
+-spec client_authn(smq_client_authn_request()) -> smq_client_authn_result().
 
-client_authn(ClientID, ClientKey) ->
+client_authn(#smq_client_authn_request{client_id = ClientID, client_key = ClientKey}) ->
     %% Create Basic Auth header string.
-    %% BUG SMQ: After Basic there should be no space, other wise all request will fail.
+    %% BUG SMQ: After Basic there should be no space, otherwise all request will fail.
     AuthString = "Basic " ++ base64:encode_to_string(ClientID ++ ":" ++ ClientKey),
 
     %% Build request
@@ -35,10 +28,10 @@ client_authn(ClientID, ClientKey) ->
             case maps:get(authenticated, ReplyData, false) of
                 true ->
                     ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
-                    {ok, ReplyData, Metadata};
+                    {ok, ReplyData};
                 1 ->
                     ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
-                    {ok, ReplyData, Metadata};
+                    {ok, ReplyData};
                 _ ->
                     ?LOG_WARNING("Auth failed: ~p", [ReplyData]),
                     {error, {unauthenticated, ReplyData}}
@@ -57,24 +50,16 @@ client_authn(ClientID, ClientKey) ->
             {error, {unexpected_response, Other}}
     end.
 
--spec client_authz(
-    DomainID :: binary() | string(),
-    ClientID :: binary() | string(),
-    ClientType :: client | user,
-    ChannelID :: binary() | string(),
-    Type :: publish | subscribe
-) ->
-    {ok}
-    | {error, {unauthorized}}
-    %% gRPC error with code/msg
-    | {error, {binary(), binary()}}
-    %% generic RPC error
-    | {error, term()}
-    %% grpc_error response
-    | {grpc_error, term()}
-    | {error, {unexpected_response, term()}}.
+-spec client_authz(smq_client_authz_request()) -> smq_client_authz_result().
 
-client_authz(DomainID, ClientID, ClientType, ChannelID, Type) ->
+client_authz(#smq_client_authz_request{
+    domain_id = DomainID,
+    channel_id = ChannelID,
+    client_id = ClientID,
+    client_type = ClientType,
+    client_key = _ClientKey,
+    type = Type
+}) ->
     %% Convert enum atom to gRPC numeric value
     TypeVal =
         case Type of
@@ -109,7 +94,7 @@ client_authz(DomainID, ClientID, ClientType, ChannelID, Type) ->
     %% Normalize all possible outcomes
     case Resp of
         {ok, ReplyData, Metadata} ->
-            io:format("Authorization successful! Reply: ~p, Metadata: ~p~n", [ReplyData, Metadata]),
+            ?LOG_INFO("Authorization successful! Reply: ~p, Metadata: ~p", [ReplyData, Metadata]),
             case maps:get(authenticated, ReplyData, false) of
                 true ->
                     ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
@@ -122,15 +107,15 @@ client_authz(DomainID, ClientID, ClientType, ChannelID, Type) ->
                     {error, {unauthorized}}
             end;
         {error, {Code, Msg, _Meta}} ->
-            io:format("gRPC error: Code=~p Msg=~p~n", [Code, Msg]),
+            ?LOG_ERROR("gRPC error: Code=~p Msg=~p", [Code, Msg]),
             {error, {Code, Msg}};
         {error, Reason} ->
-            io:format("RPC failed: ~p~n", [Reason]),
+            ?LOG_ERROR("RPC failed: ~p", [Reason]),
             {error, Reason};
         {grpc_error, Details} ->
-            io:format("gRPC error: ~p~n", [Details]),
+            ?LOG_ERROR("gRPC error: ~p", [Details]),
             {grpc_error, Details};
         Other ->
-            io:format("Unexpected RPC response: ~p~n", [Other]),
+            ?LOG_ERROR("Unexpected RPC response: ~p", [Other]),
             {error, {unexpected_response, Other}}
     end.
