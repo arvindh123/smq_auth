@@ -26,7 +26,8 @@
 -type smq_client_authz_request() :: #smq_client_authz_request{}.
 
 -type smq_client_authn_result() ::
-    {ok, clients_pb:authn_res()}
+    {ok, binary()}
+    | {error, unauthenticated}
     | {error, {binary(), binary()}}
     | {error, term()}
     | {grpc_error, term()}

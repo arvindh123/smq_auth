@@ -27,14 +27,18 @@ client_authn(#smq_client_authn_request{client_id = ClientID, client_key = Client
             %% ReplyData :: authn_res()
             case maps:get(authenticated, ReplyData, false) of
                 true ->
-                    ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
-                    {ok, ReplyData};
+                    ID = maps:get(id, ReplyData, <<"">>),
+                    IDBin = normalize_id(ID),
+                    ?LOG_INFO("Auth OK for id=~p", [IDBin]),
+                    {ok, IDBin};
                 1 ->
-                    ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
-                    {ok, ReplyData};
+                    ID = [maps:get(id, ReplyData, <<"">>)],
+                    IDBin = normalize_id(ID),
+                    ?LOG_INFO("Auth OK for id=~p", [IDBin]),
+                    {ok, IDBin};
                 _ ->
                     ?LOG_WARNING("Auth failed: ~p", [ReplyData]),
-                    {error, {unauthenticated, ReplyData}}
+                    {error, unauthenticated}
             end;
         {error, {Code, Msg}, Meta} ->
             ?LOG_WARNING("RPC failed Code=~p Msg=~p Meta=~p", [Code, Msg, Meta]),
@@ -48,6 +52,19 @@ client_authn(#smq_client_authn_request{client_id = ClientID, client_key = Client
         Other ->
             ?LOG_ERROR("Unexpected RPC response: ~p", [Other]),
             {error, {unexpected_response, Other}}
+    end.
+
+-spec normalize_id(binary() | unicode:chardata()) -> binary().
+normalize_id(ID) ->
+    case unicode:characters_to_binary(ID, utf8, utf8) of
+        Bin when is_binary(Bin) ->
+            Bin;
+        {error, _Bin, _Rest} ->
+            %% fallback: return empty binary
+            <<>>;
+        {incomplete, _Bin, _Rest} ->
+            %% fallback: return empty binary
+            <<>>
     end.
 
 -spec client_authz(smq_client_authz_request()) -> smq_client_authz_result().
