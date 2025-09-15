@@ -11,7 +11,7 @@
     client_key :: string()
 }).
 
--opaque smq_client_authn_request() :: #smq_client_authn_request{}.
+-type smq_client_authn_request() :: #smq_client_authn_request{}.
 
 -record(smq_client_authz_request, {
     domain_id :: string(),
@@ -23,9 +23,7 @@
 }).
 
 %% Authorization types
--opaque smq_client_authz_request() :: #smq_client_authz_request{}.
-
-%% Domain and client identifiers
+-type smq_client_authz_request() :: #smq_client_authz_request{}.
 
 -type smq_client_authn_result() ::
     {ok, clients_pb:authn_res()}
@@ -45,9 +43,7 @@
 
 %% Authentication result type (exported for external use)
 -export_type([
-    smq_client_authn_request/0,
     smq_client_authn_result/0,
-    smq_client_authz_request/0,
     smq_client_authz_result/0
 ]).
 
