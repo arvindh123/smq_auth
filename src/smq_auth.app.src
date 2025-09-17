@@ -1,18 +1,16 @@
 {application, smq_auth, [
-    {description, "An OTP application"},
+    {description, "SMQ Auth gRPC Client Library"},
     {vsn, "0.1.0"},
-    {registered, []},
-    {mod, {smq_auth_app, []}},
-    {applications, [
-        kernel,
-        cuttlefish,
-        grpcbox,
-        stdlib
+    {modules, [
+        auth_pb,
+        auth_v_1_auth_service_client,
+        channels_pb,
+        channels_v_1_channels_service_client,
+        clients_pb,
+        clients_v_1_clients_service_client,
+        smq_auth
     ]},
-    {env, [
-        {smq_grpc_schema_file, "schema/smq.schema"}
-    ]},
-    {modules, []},
+    {applications, [kernel, stdlib, grpcbox, cuttlefish]},
     {licenses, ["Apache-2.0"]},
     {links, []}
 ]}.

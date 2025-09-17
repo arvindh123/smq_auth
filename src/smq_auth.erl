@@ -148,7 +148,7 @@ init_smq_grpc(Config = #smq_grpc_config{}) ->
 
     case application:ensure_all_started(grpcbox) of
         {ok, Started} ->
-            logger:info("grpcbox started with channels: ~n", [], #{vars => {channels, Channels}}),
+            logger:info("grpcbox started with channels: ~n", [Channels]),
             {ok, Started};
         {error, Reason} ->
             ?LOG_ERROR("Failed to start grpcbox: ~p~n", [Reason]),
