@@ -13,6 +13,20 @@
 
 -type smq_client_authn_request() :: #smq_client_authn_request{}.
 
+-record(smq_service_grpc_config, {
+    host :: string(),
+    port :: integer()
+}).
+
+-type smq_service_grpc_config() :: #smq_service_grpc_config{}.
+
+-record(smq_grpc_config, {
+    auth :: smq_service_grpc_config(),
+    clients :: smq_service_grpc_config(),
+    channels :: smq_service_grpc_config()
+}).
+-type smq_grpc_config() :: #smq_grpc_config{}.
+
 -record(smq_client_authz_request, {
     domain_id :: string(),
     channel_id :: string(),

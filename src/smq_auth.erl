@@ -3,9 +3,59 @@
 %%%-------------------------------------------------------------------
 -module(smq_auth).
 -include_lib("kernel/include/logger.hrl").
--include("smq_auth.hrl").
+-include_lib("smq_auth/include/smq_auth.hrl").
 
--export([client_authn/1, client_authz/1]).
+-export([client_authn/1, client_authz/1, init_smq_grpc/1, close_smq_grpc/0]).
+
+-spec init_smq_grpc(#smq_grpc_config{}) -> {ok, [atom()] | none()} | {error, term()}.
+init_smq_grpc(Config = #smq_grpc_config{}) ->
+    %% Stop grpcbox if already running
+    case application:stop(grpcbox) of
+        ok -> ok;
+        {error, {not_started, grpcbox}} -> ok
+    end,
+    application:unload(grpcbox),
+    %% Make sure the app is loaded
+    application:load(grpcbox),
+
+    %% Build config dynamically
+    Channels = [
+        {auth,
+            [
+                {http, Config#smq_grpc_config.auth#smq_service_grpc_config.host,
+                    Config#smq_grpc_config.auth#smq_service_grpc_config.port, []}
+            ],
+            #{}},
+        {clients,
+            [
+                {http, Config#smq_grpc_config.clients#smq_service_grpc_config.host,
+                    Config#smq_grpc_config.clients#smq_service_grpc_config.port, []}
+            ],
+            #{}},
+        {channels,
+            [
+                {http, Config#smq_grpc_config.channels#smq_service_grpc_config.host,
+                    Config#smq_grpc_config.channels#smq_service_grpc_config.port, []}
+            ],
+            #{}}
+    ],
+
+    application:set_env(grpcbox, client, #{channels => Channels}),
+
+    case application:ensure_all_started(grpcbox) of
+        {ok, Started} ->
+            logger:info("grpcbox started with channels: ~n", [], #{vars => {channels, Channels}}),
+            {ok, Started};
+        {error, Reason} ->
+            ?LOG_ERROR("Failed to start grpcbox: ~p~n", [Reason]),
+            {error, Reason};
+        undefined ->
+            ?LOG_ERROR("Unexpected undefined return while starting grpcbox~n", []),
+            {error, undefined}
+    end.
+
+close_smq_grpc() ->
+    application:stop(grpcbox).
 
 %% Public API: RabbitMQ plugin calls this
 -spec client_authn(smq_client_authn_request()) -> smq_client_authn_result().
@@ -13,7 +63,7 @@
 client_authn(#smq_client_authn_request{client_id = ClientID, client_key = ClientKey}) ->
     %% Create Basic Auth header string.
     %% BUG SMQ: After Basic there should be no space, otherwise all request will fail.
-    AuthString = "Basic " ++ base64:encode_to_string(ClientID ++ ":" ++ ClientKey),
+    AuthString = "Basic" ++ base64:encode_to_string(ClientID ++ ":" ++ ClientKey),
 
     %% Build request
     Req = #{token => AuthString},
