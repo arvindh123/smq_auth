@@ -27,11 +27,24 @@ default_grpc_config() ->
 convert_service_config(ServiceMap) when is_map(ServiceMap) ->
     case {maps:is_key(host, ServiceMap), maps:is_key(port, ServiceMap)} of
         {true, true} ->
+            HostVal = maps:get(host, ServiceMap),
+            PortVal = maps:get(port, ServiceMap),
             #smq_service_grpc_config{
-                host = lists:flatten(io_lib:format("~p", [maps:get(host, ServiceMap)])),
-                port = list_to_integer(
-                    lists:flatten(io_lib:format("~p", [maps:get(port, ServiceMap)]))
-                )
+                host =
+                    case HostVal of
+                        % convert binary -> string
+                        H when is_binary(H) -> binary_to_list(H);
+                        % already string
+                        H when is_list(H) ->
+                            Hr = io_lib:format("~p", [H]),
+                            lists:flatten(Hr)
+                    end,
+                port =
+                    case PortVal of
+                        P when is_integer(P) -> P;
+                        P when is_binary(P) -> list_to_integer(binary_to_list(P));
+                        P when is_list(P) -> list_to_integer(P)
+                    end
             };
         _ ->
             error(missing_keys)
@@ -144,11 +157,13 @@ init_smq_grpc(Config = #smq_grpc_config{}) ->
             #{}}
     ],
 
+    io:format("channels ~p~n", [Channels]),
+
     application:set_env(grpcbox, client, #{channels => Channels}),
 
     case application:ensure_all_started(grpcbox) of
         {ok, Started} ->
-            logger:info("grpcbox started with channels: ~n", [Channels]),
+            logger:info("grpcbox started with channels: ~p~n", [Channels]),
             {ok, Started};
         {error, Reason} ->
             ?LOG_ERROR("Failed to start grpcbox: ~p~n", [Reason]),
