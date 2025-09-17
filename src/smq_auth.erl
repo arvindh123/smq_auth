@@ -281,12 +281,12 @@ client_authz(#smq_client_authz_request{
     case Resp of
         {ok, ReplyData, Metadata} ->
             ?LOG_INFO("Authorization successful! Reply: ~p, Metadata: ~p", [ReplyData, Metadata]),
-            case maps:get(authenticated, ReplyData, false) of
+            case maps:get(authorized, ReplyData, false) of
                 true ->
-                    ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
+                    ?LOG_INFO("Authorized", []),
                     {ok};
                 1 ->
-                    ?LOG_INFO("Auth OK for id=~p", [maps:get(id, ReplyData, <<"">>)]),
+                    ?LOG_INFO("Authorized", []),
                     {ok};
                 _ ->
                     ?LOG_WARNING("Auth failed: ~p", [ReplyData]),
