@@ -5,7 +5,111 @@
 -include_lib("kernel/include/logger.hrl").
 -include_lib("smq_auth/include/smq_auth.hrl").
 
+-export([convert_service_config/1, convert_grpc_config/1, default_grpc_config/0]).
 -export([client_authn/1, client_authz/1, init_smq_grpc/1, close_smq_grpc/0]).
+
+default_grpc_config() ->
+    #smq_grpc_config{
+        auth = #smq_service_grpc_config{
+            host = "localhost",
+            port = 7001
+        },
+        clients = #smq_service_grpc_config{
+            host = "localhost",
+            port = 7006
+        },
+        channels = #smq_service_grpc_config{
+            host = "localhost",
+            port = 7005
+        }
+    }.
+-spec convert_service_config(map() | term()) -> smq_service_grpc_config() | {error, term()}.
+convert_service_config(ServiceMap) when is_map(ServiceMap) ->
+    case {maps:is_key(host, ServiceMap), maps:is_key(port, ServiceMap)} of
+        {true, true} ->
+            #smq_service_grpc_config{
+                host = lists:flatten(io_lib:format("~p", [maps:get(host, ServiceMap)])),
+                port = list_to_integer(
+                    lists:flatten(io_lib:format("~p", [maps:get(port, ServiceMap)]))
+                )
+            };
+        _ ->
+            error(missing_keys)
+    end;
+convert_service_config(_) ->
+    error(invalid_service_map).
+
+-spec convert_grpc_config(map() | term()) ->
+    #smq_grpc_config{} | {error, term()}.
+convert_grpc_config(ConfigMap) when is_map(ConfigMap) ->
+    case convert_auth(ConfigMap) of
+        {ok, Auth} ->
+            case convert_channels(ConfigMap) of
+                {ok, Channels} ->
+                    case convert_clients(ConfigMap) of
+                        {ok, Clients} ->
+                            #smq_grpc_config{
+                                auth = Auth,
+                                channels = Channels,
+                                clients = Clients
+                            };
+                        {error, Reason} ->
+                            {error, Reason}
+                    end;
+                {error, Reason} ->
+                    {error, Reason}
+            end;
+        {error, Reason} ->
+            {error, Reason}
+    end;
+convert_grpc_config(_) ->
+    {error, invalid_config_map}.
+
+%% Helpers
+convert_auth(ConfigMap) ->
+    case maps:is_key(auth, ConfigMap) of
+        true ->
+            case convert_service_config(maps:get(auth, ConfigMap)) of
+                Rec when is_record(Rec, smq_service_grpc_config) ->
+                    {ok, Rec};
+                {error, Reason} ->
+                    {error, Reason};
+                Other ->
+                    {error, {invalid_auth_config, Other}}
+            end;
+        false ->
+            {error, missing_auth_key}
+    end.
+
+convert_channels(ConfigMap) ->
+    case maps:is_key(channels, ConfigMap) of
+        true ->
+            case convert_service_config(maps:get(channels, ConfigMap)) of
+                Rec when is_record(Rec, smq_service_grpc_config) ->
+                    {ok, Rec};
+                {error, Reason} ->
+                    {error, Reason};
+                Other ->
+                    {error, {invalid_channels_config, Other}}
+            end;
+        false ->
+            {error, missing_channels_key}
+    end.
+
+convert_clients(ConfigMap) ->
+    case maps:is_key(clients, ConfigMap) of
+        true ->
+            case convert_service_config(maps:get(clients, ConfigMap)) of
+                Rec when is_record(Rec, smq_service_grpc_config) ->
+                    {ok, Rec};
+                {error, Reason} ->
+                    {error, Reason};
+                Other ->
+                    {error, {invalid_clients_config, Other}}
+            end;
+        false ->
+            {error, missing_clients_key}
+    end.
 
 -spec init_smq_grpc(#smq_grpc_config{}) -> {ok, [atom()] | none()} | {error, term()}.
 init_smq_grpc(Config = #smq_grpc_config{}) ->

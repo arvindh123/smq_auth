@@ -5,6 +5,7 @@
 
 -ifndef(SMQ_AUTH_HRL).
 -define(SMQ_AUTH_HRL, true).
+-define(APPNAME, smq_auth).
 
 -record(smq_client_authn_request, {
     client_id :: string(),
