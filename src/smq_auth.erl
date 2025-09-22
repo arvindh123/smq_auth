@@ -6,7 +6,7 @@
 -include_lib("smq_auth/include/smq_auth.hrl").
 
 -export([convert_service_config/1, convert_grpc_config/1, default_grpc_config/0]).
--export([client_authn/1, client_authz/1, init_smq_grpc/1, close_smq_grpc/0]).
+-export([client_authn/1, check_client_exists/1, client_authz/1, init_smq_grpc/1, close_smq_grpc/0]).
 
 default_grpc_config() ->
     #smq_grpc_config{
@@ -166,10 +166,10 @@ init_smq_grpc(Config = #smq_grpc_config{}) ->
             logger:info("grpcbox started with channels: ~p~n", [Channels]),
             {ok, Started};
         {error, Reason} ->
-            ?LOG_ERROR("Failed to start grpcbox: ~p~n", [Reason]),
+            logger:error("Failed to start grpcbox: ~p~n", [Reason]),
             {error, Reason};
         undefined ->
-            ?LOG_ERROR("Unexpected undefined return while starting grpcbox~n", []),
+            logger:error("Unexpected undefined return while starting grpcbox~n", []),
             {error, undefined}
     end.
 
@@ -191,35 +191,27 @@ client_authn(#smq_client_authn_request{client_id = ClientID, client_key = Client
     %% Match all possible outcomes
     Resp = clients_v_1_clients_service_client:authenticate(ctx:new(), Req, Opts),
     case Resp of
-        {ok, ReplyData, Metadata} ->
-            ?LOG_INFO("Authorization successful ~p ~p", [ReplyData, Metadata]),
+        {ok, ReplyData, _Metadata} ->
             %% ReplyData :: authn_res()
             case maps:get(authenticated, ReplyData, false) of
                 true ->
                     ID = maps:get(id, ReplyData, <<"">>),
                     IDBin = normalize_id(ID),
-                    ?LOG_INFO("Auth OK for id=~p", [IDBin]),
                     {ok, IDBin};
                 1 ->
                     ID = [maps:get(id, ReplyData, <<"">>)],
                     IDBin = normalize_id(ID),
-                    ?LOG_INFO("Auth OK for id=~p", [IDBin]),
                     {ok, IDBin};
                 _ ->
-                    ?LOG_WARNING("Auth failed: ~p", [ReplyData]),
                     {error, unauthenticated}
             end;
         {error, {Code, Msg}, Meta} ->
-            ?LOG_WARNING("RPC failed Code=~p Msg=~p Meta=~p", [Code, Msg, Meta]),
             {error, {Code, Msg}};
         {error, Reason} ->
-            ?LOG_ERROR("RPC failed: ~p", [Reason]),
             {error, Reason};
         {grpc_error, Details} ->
-            ?LOG_ERROR("gRPC error: ~p", [Details]),
             {grpc_error, Details};
         Other ->
-            ?LOG_ERROR("Unexpected RPC response: ~p", [Other]),
             {error, {unexpected_response, Other}}
     end.
 
@@ -279,17 +271,15 @@ client_authz(#smq_client_authz_request{
 
     %% Normalize all possible outcomes
     case Resp of
-        {ok, ReplyData, Metadata} ->
-            ?LOG_INFO("Authorization successful! Reply: ~p, Metadata: ~p", [ReplyData, Metadata]),
+        {ok, ReplyData, _Metadata} ->
             case maps:get(authorized, ReplyData, false) of
                 true ->
-                    ?LOG_INFO("Authorized", []),
+                    %  Authorized
                     {ok};
                 1 ->
-                    ?LOG_INFO("Authorized", []),
+                    %  Authorized
                     {ok};
                 _ ->
-                    ?LOG_WARNING("Auth failed: ~p", [ReplyData]),
                     {error, {unauthorized}}
             end;
         {error, {Code, Msg, _Meta}} ->
@@ -303,5 +293,37 @@ client_authz(#smq_client_authz_request{
             {grpc_error, Details};
         Other ->
             ?LOG_ERROR("Unexpected RPC response: ~p", [Other]),
+            {error, {unexpected_response, Other}}
+    end.
+
+-spec check_client_exists(ClientID :: string()) -> true | false | {error, term()}.
+check_client_exists(ClientID) ->
+    Req = #{id => ClientID},
+    Opts = #{channel => clients},
+    Resp = clients_v_1_clients_service_client:retrieve_entity(ctx:new(), Req, Opts),
+    case Resp of
+        {ok, #{entity := Entity}, _Metadata} ->
+            RetrievedId = maps:get(id, Entity, undefined),
+            case RetrievedId of
+                undefined ->
+                    false;
+                _ ->
+                    if
+                        RetrievedId =:= ClientID ->
+                            true;
+                        true ->
+                            false
+                    end
+            end;
+        {ok, _NoEntity, _Metadata} ->
+            ?LOG_WARNING("Entity key missing in reply for ClientID=~p", [ClientID]),
+            false;
+        {error, {Code, Msg, _Meta}} ->
+            {error, {Code, Msg}};
+        {error, Reason} ->
+            {error, Reason};
+        {grpc_error, Details} ->
+            {error, {grpc_error, Details}};
+        Other ->
             {error, {unexpected_response, Other}}
     end.
