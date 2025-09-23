@@ -20,7 +20,7 @@ handle_call({client_authn, ClientID, ClientKey}, _From, State) ->
         client_key = ClientKey
     }),
     {reply, Reply, State};
-% gen_server:call(smq_auth_worker,{check_client_exists,{"asdf"}}).
+% gen_server:call(smq_auth_worker,{check_client_exists,"asdf"}).
 handle_call({check_client_exists, ClientID}, _From, State) ->
     Reply = smq_auth:check_client_exists(ClientID),
     {reply, Reply, State};
